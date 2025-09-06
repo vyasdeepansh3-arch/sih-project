@@ -1,0 +1,13 @@
+This file tells Git which files and folders to ignore.
+Dependencies
+node_modules/
+
+Database file
+We don't want to upload our local database.
+The server will create its own.
+internships.db
+
+Log files
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
