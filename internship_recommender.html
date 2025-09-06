@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PM Internship Scheme - Recommender</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .form-checkbox:checked { background-color: #2563eb; border-color: #2563eb; }
+        .loader { border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        /* Modal styles */
+        .modal-backdrop { transition: opacity 0.3s ease; }
+        .modal-content { transition: transform 0.3s ease; }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800">
+
+    <div class="container mx-auto p-4 md:p-8 max-w-4xl">
+        <!-- Language Switcher, Header, and Form remain the same -->
+        <div class="flex justify-end mb-4">
+             <select id="languageSwitcher" class="bg-white border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="en">English</option><option value="hi">हिन्दी</option>
+            </select>
+        </div>
+        <header class="text-center mb-8">
+            <h1 class="text-3xl md:text-4xl font-bold text-blue-700" data-lang="title">PM Internship Recommender</h1>
+            <p class="text-gray-600 mt-2" data-lang="subtitle">Find the best internships suited for you.</p>
+        </header>
+        <div class="bg-white p-6 md:p-8 rounded-2xl shadow-lg">
+             <form id="recommendationForm"><!-- Form content is unchanged --><div class="grid grid-cols-1 md:grid-cols-2 gap-6"><div class="md:col-span-2"><label for="education" class="block text-lg font-semibold mb-2 text-gray-700" data-lang="educationLabel">Your Highest Education</label><select id="education" name="education" class="w-full p-3 bg-gray-100 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none transition"><option value="10th Pass" data-lang="edu10">10th Pass</option><option value="12th Pass" data-lang="edu12">12th Pass</option><option value="Diploma" data-lang="eduDiploma">Diploma</option><option value="Graduate" data-lang="eduGrad">Graduate (B.A, B.Sc, etc.)</option><option value="Post Graduate" data-lang="eduPostGrad">Post Graduate (M.A, M.Sc, etc.)</option></select></div><div class="md:col-span-2"><h3 class="text-lg font-semibold mb-3 text-gray-700" data-lang="skillsLabel">What are your skills?</h3><div id="skillsContainer" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3"></div></div><div class="md:col-span-2"><h3 class="text-lg font-semibold mb-3 text-gray-700" data-lang="interestsLabel">Which sectors interest you?</h3><div id="interestsContainer" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3"></div></div><div><label for="location" class="block text-lg font-semibold mb-2 text-gray-700" data-lang="locationLabel">Preferred Location</label><input type="text" id="location" name="location" placeholder="e.g., Delhi, Mumbai, Rural" class="w-full p-3 bg-gray-100 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none transition" data-lang-placeholder="locationPlaceholder"></div></div><div class="mt-8 text-center"><button type="submit" class="bg-blue-600 text-white font-bold py-3 px-10 rounded-lg hover:bg-blue-700 transition-transform transform hover:scale-105 shadow-md text-lg" data-lang="submitButton">Find My Internships</button></div></form>
+        </div>
+        <!-- Results Section -->
+        <div id="results" class="mt-10 hidden">
+            <h2 class="text-2xl font-bold text-center mb-6" data-lang="resultsTitle">Your Top Recommendations</h2>
+            <div id="loader" class="flex justify-center items-center py-8 hidden"><div class="loader"></div></div>
+            <div id="results-container" class="space-y-4"></div>
+            <div id="no-results" class="text-center bg-white p-8 rounded-2xl shadow-lg hidden"><h3 class="mt-2 text-xl font-medium text-gray-900" data-lang="noResultsTitle">No Matching Internships Found</h3><p class="mt-1 text-gray-500" data-lang="noResultsText">Try adjusting your skills or location preferences.</p></div>
+            <div id="api-error" class="text-center bg-red-100 text-red-700 p-6 rounded-2xl shadow-lg hidden"><h3 class="mt-2 text-xl font-medium" data-lang="errorTitle">Something Went Wrong</h3><p class="mt-1" data-lang="errorText">Could not connect to the recommendation server. Please try again later.</p></div>
+        </div>
+    </div>
+
+    <!-- NEW: Internship Details Modal -->
+    <div id="detailsModal" class="fixed inset-0 z-50 flex items-center justify-center hidden">
+        <!-- Backdrop -->
+        <div id="modalBackdrop" class="absolute inset-0 bg-black bg-opacity-60 modal-backdrop"></div>
+        <!-- Modal Content -->
+        <div class="relative bg-white rounded-xl shadow-2xl w-11/12 max-w-2xl mx-auto max-h-[90vh] overflow-y-auto modal-content scale-95">
+            <div class="sticky top-0 bg-white p-5 border-b flex justify-between items-center">
+                <h2 id="modalTitle" class="text-2xl font-bold text-gray-900">Internship Details</h2>
+                <button id="closeModalBtn" class="text-gray-500 hover:text-gray-800 text-3xl">&times;</button>
+            </div>
+            <div id="modalBody" class="p-6">
+                 <!-- Loader for modal content -->
+                <div id="modalLoader" class="flex justify-center items-center py-16"><div class="loader"></div></div>
+                <!-- Content will be injected here -->
+                <div id="modalContent"></div>
+            </div>
+        </div>
+    </div>
+
+
+    <script>
+        const API_URL = 'http://localhost:3000';
+        const translations = {en: {title: 'PM Internship Recommender', subtitle: 'Find the best internships suited for you.', educationLabel: 'Your Highest Education', edu10: '10th Pass', edu12: '12th Pass', eduDiploma: 'Diploma', eduGrad: 'Graduate (B.A, B.Sc, etc.)', eduPostGrad: 'Post Graduate (M.A, M.Sc, etc.)', skillsLabel: 'What are your skills?', interestsLabel: 'Which sectors interest you?', locationLabel: 'Preferred Location', locationPlaceholder: 'e.g., Delhi, Mumbai, Rural', submitButton: 'Find My Internships', resultsTitle: 'Your Top Recommendations', noResultsTitle: 'No Matching Internships Found', noResultsText: 'Try adjusting your skills or location preferences.', errorTitle: 'Something Went Wrong', errorText: 'Could not connect to the recommendation server. Please try again later.', skillsRequired: 'Skills Required:', viewDetails: 'View Details', sector: 'Sector:', stipend: 'Stipend:', duration: 'Duration:', description: 'Description:', applyNow: 'Apply Now', posted: 'Posted'}, hi: {title: 'पीएम इंटर्नशिप सिफ़ारिशकर्ता', subtitle: 'आपके लिए सबसे उपयुक्त इंटर्नशिप खोजें।', educationLabel: 'आपकी उच्चतम शिक्षा', edu10: '10वीं पास', edu12: '12वीं पास', eduDiploma: 'डिप्लोमा', eduGrad: 'स्नातक (बी.ए, बी.एससी, आदि)', eduPostGrad: 'स्नातकोत्तर (एम.ए, एम.एससी, आदि)', skillsLabel: 'आपके कौशल क्या हैं?', interestsLabel: 'आपकी किन क्षेत्रों में रुचि है?', locationLabel: 'पसंदीदा स्थान', locationPlaceholder: 'जैसे, दिल्ली, मुंबई, ग्रामीण', submitButton: 'मेरी इंटर्नशिप खोजें', resultsTitle: 'आपके लिए शीर्ष सिफ़ारिशें', noResultsTitle: 'कोई मेल खाने वाली इंटर्नशिप नहीं मिली', noResultsText: 'अपने कौशल या स्थान की प्राथमिकताएं बदलने का प्रयास करें।', errorTitle: 'कुछ गलत हो गया', errorText: 'सिफारिश सर्वर से कनेक्ट नहीं हो सका। कृपया बाद में पुनः प्रयास करें।', skillsRequired: 'आवश्यक कौशल:', viewDetails: 'विवरण देखें', sector: 'क्षेत्र:', stipend: 'वजीफा:', duration: 'अवधि:', description: 'विवरण:', applyNow: 'अभी आवेदन करें', posted: 'पोस्ट किया गया'}};
+        const allSkills = ['Computer Basics', 'Typing', 'Communication', 'Field Work', 'HTML & CSS', 'JavaScript', 'Social Media', 'Content Creation', 'Graphic Design', 'Technical Skills'];
+        const allInterests = ['Government', 'Agriculture', 'Healthcare', 'IT', 'Customer Service', 'Design', 'Energy', 'Media', 'Retail'];
+
+        document.addEventListener('DOMContentLoaded', () => {
+            populateCheckboxes('skillsContainer', allSkills);
+            populateCheckboxes('interestsContainer', allInterests);
+            document.getElementById('recommendationForm').addEventListener('submit', handleFormSubmit);
+            document.getElementById('languageSwitcher').addEventListener('change', (e) => switchLanguage(e.target.value));
+            
+            // NEW: Modal event listeners
+            document.getElementById('closeModalBtn').addEventListener('click', closeDetailsModal);
+            document.getElementById('modalBackdrop').addEventListener('click', closeDetailsModal);
+            document.getElementById('results-container').addEventListener('click', (e) => {
+                if(e.target.closest('.view-details-btn')) {
+                    const id = e.target.closest('.view-details-btn').dataset.id;
+                    openDetailsModal(id);
+                }
+            });
+
+            switchLanguage('en');
+        });
+        
+        // --- CORE FUNCTIONS ---
+        function populateCheckboxes(containerId, items) { /* Unchanged */ const container = document.getElementById(containerId); container.innerHTML = ''; items.forEach(item => { container.innerHTML += `<label class="flex items-center space-x-2 p-3 bg-gray-100 rounded-lg cursor-pointer hover:bg-gray-200 transition"><input type="checkbox" name="${containerId.replace('Container','')}" value="${item}" class="form-checkbox h-5 w-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"><span class="text-gray-700">${item}</span></label>`; }); }
+        function switchLanguage(lang) { /* Unchanged */ document.querySelectorAll('[data-lang]').forEach(el => { const key = el.dataset.lang; if (translations[lang][key]) el.textContent = translations[lang][key]; }); document.querySelectorAll('[data-lang-placeholder]').forEach(el => { const key = el.dataset.langPlaceholder; if (translations[lang][key]) el.placeholder = translations[lang][key]; }); }
+
+        async function handleFormSubmit(event) { /* Unchanged but uses updated displayRecommendations */ event.preventDefault(); const resultsSection = document.getElementById('results'); const loader = document.getElementById('loader'); const resultsContainer = document.getElementById('results-container'); const noResultsDiv = document.getElementById('no-results'); const apiErrorDiv = document.getElementById('api-error'); resultsSection.classList.remove('hidden'); loader.classList.remove('hidden'); resultsContainer.innerHTML = ''; noResultsDiv.classList.add('hidden'); apiErrorDiv.classList.add('hidden'); resultsSection.scrollIntoView({ behavior: 'smooth' }); const userProfile = { education: document.getElementById('education').value, skills: Array.from(document.querySelectorAll('input[name="skills"]:checked')).map(el => el.value), interests: Array.from(document.querySelectorAll('input[name="interests"]:checked')).map(el => el.value), location: document.getElementById('location').value.trim().toLowerCase(), }; try { const response = await fetch(`${API_URL}/recommendations`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(userProfile) }); if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`); const recommendations = await response.json(); setTimeout(() => { loader.classList.add('hidden'); displayRecommendations(recommendations); }, 500); } catch (error) { console.error("API call failed:", error); loader.classList.add('hidden'); apiErrorDiv.classList.remove('hidden'); } }
+
+        function displayRecommendations(recommendations) {
+            const resultsContainer = document.getElementById('results-container');
+            const noResultsDiv = document.getElementById('no-results');
+            const lang = document.getElementById('languageSwitcher').value;
+            
+            if (recommendations.length === 0) {
+                noResultsDiv.classList.remove('hidden');
+                return;
+            }
+
+            recommendations.forEach(internship => {
+                const postedDate = new Date(internship.posted_date);
+                const today = new Date();
+                const diffTime = Math.abs(today - postedDate);
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                const postedText = diffDays <= 1 ? 'today' : `${diffDays-1} days ago`;
+
+                const card = `
+                    <div class="bg-white rounded-xl shadow-md overflow-hidden transition-transform transform hover:-translate-y-1 hover:shadow-xl border border-gray-200">
+                        <div class="p-6">
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <div class="uppercase tracking-wide text-sm text-indigo-600 font-semibold">${internship.company}</div>
+                                    <h3 class="block mt-1 text-xl leading-tight font-bold text-black">${internship.title}</h3>
+                                </div>
+                                <div class="flex items-center text-gray-500">
+                                    <svg class="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                                    <span>${internship.location}</span>
+                                </div>
+                            </div>
+                            <p class="mt-2 text-gray-600"><strong>${translations[lang].sector}</strong> ${internship.sector}</p>
+                            <div class="flex justify-between items-center mt-6">
+                                <p class="text-sm text-gray-500">${translations[lang].posted} ${postedText}</p>
+                                <button data-id="${internship.id}" class="view-details-btn bg-blue-500 text-white font-bold py-2 px-6 rounded-lg hover:bg-blue-600 transition">${translations[lang].viewDetails}</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                resultsContainer.innerHTML += card;
+            });
+        }
+
+        // --- NEW: Modal Functions ---
+        async function openDetailsModal(id) {
+            const modal = document.getElementById('detailsModal');
+            const modalLoader = document.getElementById('modalLoader');
+            const modalContent = document.getElementById('modalContent');
+            const lang = document.getElementById('languageSwitcher').value;
+
+            modal.classList.remove('hidden');
+            document.body.classList.add('overflow-hidden'); // Prevent background scrolling
+            modalLoader.classList.remove('hidden');
+            modalContent.innerHTML = '';
+
+            try {
+                const response = await fetch(`${API_URL}/internship/${id}`);
+                if (!response.ok) throw new Error('Internship details not found.');
+                const details = await response.json();
+                
+                modalLoader.classList.add('hidden');
+
+                // Populate Modal Content
+                document.getElementById('modalTitle').textContent = details.title;
+                modalContent.innerHTML = `
+                    <div class="space-y-4">
+                        <p class="text-lg text-gray-700">${details.company} - <span class="text-gray-500">${details.location}</span></p>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-center">
+                            <div class="bg-gray-100 p-3 rounded-lg"><dt class="text-sm font-medium text-gray-500">${translations[lang].stipend}</dt><dd class="text-lg font-semibold text-gray-900">${details.stipend}</dd></div>
+                            <div class="bg-gray-100 p-3 rounded-lg"><dt class="text-sm font-medium text-gray-500">${translations[lang].duration}</dt><dd class="text-lg font-semibold text-gray-900">${details.duration}</dd></div>
+                        </div>
+
+                        <div>
+                            <h4 class="font-semibold text-gray-800">${translations[lang].description}</h4>
+                            <p class="text-gray-600 mt-1">${details.description}</p>
+                        </div>
+                        <div>
+                            <h4 class="font-semibold text-gray-800">${translations[lang].skillsRequired}</h4>
+                            <div class="flex flex-wrap gap-2 mt-2">
+                                ${details.required_skills.map(skill => `<span class="bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-1 rounded-full">${skill}</span>`).join('')}
+                            </div>
+                        </div>
+
+                        <div class="pt-4 text-center">
+                            <a href="${details.apply_link}" target="_blank" class="w-full md:w-auto inline-block bg-green-600 text-white font-bold py-3 px-12 rounded-lg hover:bg-green-700 transition shadow-lg text-lg">${translations[lang].applyNow}</a>
+                        </div>
+                    </div>
+                `;
+
+            } catch(error) {
+                modalLoader.classList.add('hidden');
+                modalContent.innerHTML = `<p class="text-red-500 text-center">${error.message}</p>`;
+            }
+        }
+
+        function closeDetailsModal() {
+            const modal = document.getElementById('detailsModal');
+            modal.classList.add('hidden');
+            document.body.classList.remove('overflow-hidden');
+        }
+
+    </script>
+</body>
+</html>
+
